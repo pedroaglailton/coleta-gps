@@ -17,6 +17,12 @@ input:focus{outline:2px solid var(--ac);border-color:transparent}
 button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:14px;background:var(--ln);color:var(--tx);cursor:pointer;width:100%}
 button:active{transform:scale(.98)}
 .main{background:var(--ac);color:#1b1300;font-size:18px;padding:17px;margin-top:10px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.seg4{grid-template-columns:repeat(2,1fr)}
+.seg button{padding:12px 6px;font-size:15px;background:var(--bg);border:1px solid var(--ln);line-height:1.25}
+.seg button b{display:block;font-size:20px;color:var(--ac)}
+.seg button.on{background:var(--ac);color:#1b1300;border-color:var(--ac)}
+.seg button.on b{color:#1b1300}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .gps{margin-top:12px;font-size:14px;color:var(--mt);line-height:1.5;min-height:42px}
 .gps b{color:var(--tx);font-variant-numeric:tabular-nums}
@@ -39,8 +45,14 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
 <h1>Coleta de coordenadas</h1>
 
 <div class="card">
-  <label for="nome">Nome da câmera</label>
-  <input id="nome" placeholder="ex.: CAM-0123 Av. Beira Mar" autocomplete="off" autocapitalize="characters">
+  <label>Local</label>
+  <div class="seg" id="segL"></div>
+  <label style="margin-top:12px">Tipo de câmera</label>
+  <div class="seg seg4" id="segT"></div>
+  <div class="row" style="margin-top:12px">
+    <div><label for="num">Número</label><input id="num" type="number" inputmode="numeric" min="1" max="999"></div>
+    <div><label for="nome">Nome da câmera</label><input id="nome" autocomplete="off" autocapitalize="characters"></div>
+  </div>
   <button class="main" id="salvar">Capturar localização e salvar</button>
   <div class="gps" id="gps">Aguardando captura…</div>
 </div>
@@ -72,14 +84,46 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
   var dados=[];
   try{dados=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){dados=[]}
 
+  var PREFIXO="FB";
+  var LOCAIS={P:"Parque",E:"Estádio",T:"Tauá"};
+  var TIPOS={F:"Facial",Z:"PTZ",R:"LPR",C:"Contexto"};
+  var selL="P",selT="F";
+
+  function montarSeg(id,mapa,get,set){
+    var box=$(id);box.innerHTML="";
+    Object.keys(mapa).forEach(function(k){
+      var b=document.createElement("button");b.type="button";b.dataset.k=k;
+      b.innerHTML="<b>"+k+"</b>"+mapa[k];
+      b.onclick=function(){set(k);atualizar()};
+      box.appendChild(b);
+    });
+  }
+  function marcar(){
+    Array.prototype.forEach.call($("segL").children,function(b){b.className=b.dataset.k===selL?"on":""});
+    Array.prototype.forEach.call($("segT").children,function(b){b.className=b.dataset.k===selT?"on":""});
+  }
+  function proximo(){
+    var pre=PREFIXO+selL+selT,max=0;
+    dados.forEach(function(r){
+      var m=String(r.nome||"").toUpperCase().match(/^(.*?)(\d+)$/);
+      if(m&&m[1]===pre)max=Math.max(max,parseInt(m[2],10));
+    });
+    return max+1;
+  }
+  function compor(){
+    var n=parseInt($("num").value,10);if(!(n>0))n=1;
+    $("nome").value=PREFIXO+selL+selT+String(n).padStart(3,"0");
+  }
+  function atualizar(){$("num").value=proximo();compor();marcar()}
+
   function salvarLS(){try{localStorage.setItem(KEY,JSON.stringify(dados))}catch(e){toast("Falha ao gravar no aparelho")}}
   function toast(m){var t=$("toast");t.textContent=m;t.className="toast on";clearTimeout(toast.h);toast.h=setTimeout(function(){t.className="toast"},1800)}
   function pad(n){return String(n).padStart(2,"0")}
   function fmtData(ts){var d=new Date(ts);return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes())}
-  function linha(r){return r.nome+";"+r.lat.toFixed(7)+";"+r.lng.toFixed(7)+";"+Math.round(r.acc)+"m;"+fmtData(r.ts)}
+  function linha(r){return r.nome+";"+(r.local||"")+";"+(r.tipo||"")+";"+r.lat.toFixed(7)+";"+r.lng.toFixed(7)+";"+Math.round(r.acc)+"m;"+fmtData(r.ts)}
 
   function texto(){
-    var h="NOME;LATITUDE;LONGITUDE;PRECISAO;DATA_HORA\n";
+    var h="NOME;LOCAL;TIPO;LATITUDE;LONGITUDE;PRECISAO;DATA_HORA\n";
     return h+dados.map(linha).join("\n")+"\n";
   }
 
@@ -93,7 +137,7 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
       var i=document.createElement("div");i.className="i";
       var n=document.createElement("div");n.className="n";n.textContent=r.nome;
       var c=document.createElement("div");c.className="c";
-      c.textContent=r.lat.toFixed(6)+", "+r.lng.toFixed(6)+"  ±"+Math.round(r.acc)+"m";
+      c.textContent=[r.local,r.tipo].filter(Boolean).join(" / ")+(r.local||r.tipo?"  ":"")+r.lat.toFixed(6)+", "+r.lng.toFixed(6)+"  ±"+Math.round(r.acc)+"m";
       i.appendChild(n);i.appendChild(c);
       var b=document.createElement("button");b.textContent="Excluir";
       b.onclick=function(){if(confirm("Excluir "+r.nome+"?")){dados.splice(real,1);salvarLS();render()}};
@@ -127,16 +171,17 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
     var nome=$("nome").value.trim();
     if(!nome){toast("Digite o nome da câmera");$("nome").focus();return}
     nome=nome.replace(/[;\n\r]+/g," ");
+    var tipo=TIPOS[selT],local=LOCAIS[selL];
     var btn=$("salvar");btn.disabled=true;btn.textContent="Capturando…";
     $("gps").textContent="Buscando satélites…";
     capturar(function(pos,erro){
       btn.disabled=false;btn.textContent="Capturar localização e salvar";
       if(!pos){$("gps").innerHTML='<span class="bad">'+erro+'</span>';return}
-      dados.push({nome:nome,lat:pos.lat,lng:pos.lng,acc:pos.acc,ts:Date.now()});
+      dados.push({nome:nome,local:local,tipo:tipo,lat:pos.lat,lng:pos.lng,acc:pos.acc,ts:Date.now()});
       salvarLS();render();
       var cl=pos.acc<=10?"good":"";
-      $("gps").innerHTML='Salvo: <b>'+nome.replace(/</g,"&lt;")+'</b><br>'+pos.lat.toFixed(7)+', '+pos.lng.toFixed(7)+' <span class="'+cl+'">±'+Math.round(pos.acc)+' m</span>';
-      $("nome").value="";
+      $("gps").innerHTML='Salvo: <b>'+nome.replace(/</g,"&lt;")+'</b>'+' ('+local+' / '+tipo+')'+'<br>'+pos.lat.toFixed(7)+', '+pos.lng.toFixed(7)+' <span class="'+cl+'">±'+Math.round(pos.acc)+' m</span>';
+      atualizar();
       if(navigator.vibrate)navigator.vibrate(60);
     });
   };
@@ -186,6 +231,10 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
     if(dados.length&&confirm("Apagar TODOS os "+dados.length+" registros?")){dados=[];salvarLS();render()}
   };
 
+  montarSeg("segL",LOCAIS,null,function(k){selL=k});
+  montarSeg("segT",TIPOS,null,function(k){selT=k});
+  $("num").oninput=compor;
+  atualizar();
   render();
 })();
 </script>
