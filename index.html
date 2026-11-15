@@ -49,6 +49,10 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
   <div class="seg" id="segL"></div>
   <label style="margin-top:12px">Tipo de câmera</label>
   <div class="seg seg4" id="segT"></div>
+  <div id="boxSub" style="display:none;margin-top:12px">
+    <label>Contexto: é Dome ou Bullet?</label>
+    <div class="seg seg4" id="segS"></div>
+  </div>
   <div class="row" style="margin-top:12px">
     <div><label for="num">Número</label><input id="num" type="number" inputmode="numeric" min="1" max="999"></div>
     <div><label for="nome">Nome da câmera</label><input id="nome" autocomplete="off" autocapitalize="characters"></div>
@@ -87,7 +91,8 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
   var PREFIXO="FB";
   var LOCAIS={P:"Parque",E:"Estádio",T:"Tauá"};
   var TIPOS={F:"Facial",Z:"PTZ",R:"LPR",C:"Contexto"};
-  var selL="P",selT="F";
+  var SUBS={D:"Dome",B:"Bullet"};
+  var selL="P",selT="F",selS=null;
 
   function montarSeg(id,mapa,get,set){
     var box=$(id);box.innerHTML="";
@@ -101,9 +106,13 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
   function marcar(){
     Array.prototype.forEach.call($("segL").children,function(b){b.className=b.dataset.k===selL?"on":""});
     Array.prototype.forEach.call($("segT").children,function(b){b.className=b.dataset.k===selT?"on":""});
+    if(selT!=="C")selS=null;
+    $("boxSub").style.display=selT==="C"?"block":"none";
+    Array.prototype.forEach.call($("segS").children,function(b){b.className=b.dataset.k===selS?"on":""});
   }
+  function pref(){return PREFIXO+selL+selT+(selT==="C"&&selS?selS:"")}
   function proximo(){
-    var pre=PREFIXO+selL+selT,max=0;
+    var pre=pref(),max=0;
     dados.forEach(function(r){
       var m=String(r.nome||"").toUpperCase().match(/^(.*?)(\d+)$/);
       if(m&&m[1]===pre)max=Math.max(max,parseInt(m[2],10));
@@ -112,7 +121,7 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
   }
   function compor(){
     var n=parseInt($("num").value,10);if(!(n>0))n=1;
-    $("nome").value=PREFIXO+selL+selT+String(n).padStart(3,"0");
+    $("nome").value=pref()+String(n).padStart(3,"0");
   }
   function atualizar(){$("num").value=proximo();compor();marcar()}
 
@@ -120,10 +129,10 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
   function toast(m){var t=$("toast");t.textContent=m;t.className="toast on";clearTimeout(toast.h);toast.h=setTimeout(function(){t.className="toast"},1800)}
   function pad(n){return String(n).padStart(2,"0")}
   function fmtData(ts){var d=new Date(ts);return pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes())}
-  function linha(r){return r.nome+";"+(r.local||"")+";"+(r.tipo||"")+";"+r.lat.toFixed(7)+";"+r.lng.toFixed(7)+";"+Math.round(r.acc)+"m;"+fmtData(r.ts)}
+  function linha(r){return r.nome+";"+(r.local||"")+";"+(r.tipo||"")+";"+(r.subtipo||"")+";"+r.lat.toFixed(7)+";"+r.lng.toFixed(7)+";"+Math.round(r.acc)+"m;"+fmtData(r.ts)}
 
   function texto(){
-    var h="NOME;LOCAL;TIPO;LATITUDE;LONGITUDE;PRECISAO;DATA_HORA\n";
+    var h="NOME;LOCAL;TIPO;SUBTIPO;LATITUDE;LONGITUDE;PRECISAO;DATA_HORA\n";
     return h+dados.map(linha).join("\n")+"\n";
   }
 
@@ -137,7 +146,7 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
       var i=document.createElement("div");i.className="i";
       var n=document.createElement("div");n.className="n";n.textContent=r.nome;
       var c=document.createElement("div");c.className="c";
-      c.textContent=[r.local,r.tipo].filter(Boolean).join(" / ")+(r.local||r.tipo?"  ":"")+r.lat.toFixed(6)+", "+r.lng.toFixed(6)+"  ±"+Math.round(r.acc)+"m";
+      c.textContent=[r.local,r.tipo,r.subtipo].filter(Boolean).join(" / ")+(r.local||r.tipo?"  ":"")+r.lat.toFixed(6)+", "+r.lng.toFixed(6)+"  ±"+Math.round(r.acc)+"m";
       i.appendChild(n);i.appendChild(c);
       var b=document.createElement("button");b.textContent="Excluir";
       b.onclick=function(){if(confirm("Excluir "+r.nome+"?")){dados.splice(real,1);salvarLS();render()}};
@@ -171,17 +180,18 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
     var nome=$("nome").value.trim();
     if(!nome){toast("Digite o nome da câmera");$("nome").focus();return}
     nome=nome.replace(/[;\n\r]+/g," ");
-    var tipo=TIPOS[selT],local=LOCAIS[selL];
+    var tipo=TIPOS[selT],local=LOCAIS[selL],sub=selT==="C"?SUBS[selS]:"";
+    if(selT==="C"&&!selS){toast("Escolha Dome ou Bullet");return}
     var btn=$("salvar");btn.disabled=true;btn.textContent="Capturando…";
     $("gps").textContent="Buscando satélites…";
     capturar(function(pos,erro){
       btn.disabled=false;btn.textContent="Capturar localização e salvar";
       if(!pos){$("gps").innerHTML='<span class="bad">'+erro+'</span>';return}
-      dados.push({nome:nome,local:local,tipo:tipo,lat:pos.lat,lng:pos.lng,acc:pos.acc,ts:Date.now()});
+      dados.push({nome:nome,local:local,tipo:tipo,subtipo:sub,lat:pos.lat,lng:pos.lng,acc:pos.acc,ts:Date.now()});
       salvarLS();render();
       var cl=pos.acc<=10?"good":"";
-      $("gps").innerHTML='Salvo: <b>'+nome.replace(/</g,"&lt;")+'</b>'+' ('+local+' / '+tipo+')'+'<br>'+pos.lat.toFixed(7)+', '+pos.lng.toFixed(7)+' <span class="'+cl+'">±'+Math.round(pos.acc)+' m</span>';
-      atualizar();
+      $("gps").innerHTML='Salvo: <b>'+nome.replace(/</g,"&lt;")+'</b>'+' ('+local+' / '+tipo+(sub?' / '+sub:'')+')'+'<br>'+pos.lat.toFixed(7)+', '+pos.lng.toFixed(7)+' <span class="'+cl+'">±'+Math.round(pos.acc)+' m</span>';
+      selS=null;atualizar();
       if(navigator.vibrate)navigator.vibrate(60);
     });
   };
@@ -233,6 +243,7 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
 
   montarSeg("segL",LOCAIS,null,function(k){selL=k});
   montarSeg("segT",TIPOS,null,function(k){selT=k});
+  montarSeg("segS",SUBS,null,function(k){selS=k});
   $("num").oninput=compor;
   atualizar();
   render();
