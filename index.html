@@ -51,7 +51,8 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
 </div>
 
 <div class="card">
-  <div class="row" style="margin-top:0">
+  <button class="main" id="whats" style="margin-top:0;background:var(--ok)">Enviar pelo WhatsApp</button>
+  <div class="row">
     <button id="compartilhar">Enviar TXT</button>
     <button id="baixar">Baixar TXT</button>
   </div>
@@ -155,6 +156,18 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
     }else{toast("Compartilhar indisponível. Use Baixar ou Copiar.")}
   };
 
+  /* Número que recebe os dados, com código do país e DDD, só dígitos.
+     Exemplo: "5585999999999". Deixe vazio para escolher o contato na hora. */
+  var NUMERO_WHATSAPP="";
+
+  $("whats").onclick=function(){
+    if(!dados.length){toast("Nada para enviar");return}
+    var msg=encodeURIComponent(texto());
+    if(msg.length>6000){toast("Muitos registros. Use Enviar TXT.");return}
+    var num=String(NUMERO_WHATSAPP||"").replace(/\D/g,"");
+    window.location.href="https://wa.me/"+num+"?text="+msg;
+  };
+
   $("baixar").onclick=function(){
     if(!dados.length){toast("Nada para baixar");return}
     var f=arquivo();var a=document.createElement("a");
@@ -178,4 +191,3 @@ textarea{width:100%;min-height:110px;margin-top:8px;background:var(--bg);color:v
 </script>
 </body>
 </html>
-
